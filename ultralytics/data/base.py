@@ -17,6 +17,9 @@ from torch.utils.data import Dataset
 from ultralytics.utils import DEFAULT_CFG, LOCAL_RANK, LOGGER, NUM_THREADS, TQDM
 from .utils import HELP_URL, IMG_FORMATS
 
+import tifffile
+from skimage.transform import resize
+
 
 class BaseDataset(Dataset):
     """
@@ -156,7 +159,11 @@ class BaseDataset(Dataset):
                     Path(fn).unlink(missing_ok=True)
                     im = cv2.imread(f)  # BGR
             else:  # read image
-                im = cv2.imread(f)  # BGR
+                if f.endswith('.tiff') or f.endswith('.TIFF'):
+                    im = tifffile.imread(f)
+                    im = np.transpose(im, axes=(1, 2, 0))
+                else:
+                    im = cv2.imread(f)  # BGR
             if im is None:
                 raise FileNotFoundError(f"Image Not Found {f}")
 
@@ -165,9 +172,11 @@ class BaseDataset(Dataset):
                 r = self.imgsz / max(h0, w0)  # ratio
                 if r != 1:  # if sizes are not equal
                     w, h = (min(math.ceil(w0 * r), self.imgsz), min(math.ceil(h0 * r), self.imgsz))
-                    im = cv2.resize(im, (w, h), interpolation=cv2.INTER_LINEAR)
+                    # im = cv2.resize(im, (w, h), interpolation=cv2.INTER_LINEAR)
+                    im = resize(im, (w, h), mode='constant', anti_aliasing=True)
             elif not (h0 == w0 == self.imgsz):  # resize by stretching image to square imgsz
-                im = cv2.resize(im, (self.imgsz, self.imgsz), interpolation=cv2.INTER_LINEAR)
+                im = resize(im, (self.imgsz, self.imgsz), mode='constant', anti_aliasing=True)
+                # im = cv2.resize(im, (self.imgsz, self.imgsz), interpolation=cv2.INTER_LINEAR)
 
             # Add to buffer if training with augmentations
             if self.augment:

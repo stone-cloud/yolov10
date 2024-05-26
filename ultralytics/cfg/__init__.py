@@ -513,7 +513,6 @@ def entrypoint(debug=""):
 
     # Check keys
     check_dict_alignment(full_args_dict, overrides)
-
     # Mode
     mode = overrides.get("mode")
     if mode is None:
@@ -569,7 +568,6 @@ def entrypoint(debug=""):
                 f"Ignoring 'task={task}' and updating to 'task={model.task}' to match model."
             )
         task = model.task
-
     # Mode
     if mode in ("predict", "track") and "source" not in overrides:
         overrides["source"] = DEFAULT_CFG.source or ASSETS
@@ -582,9 +580,9 @@ def entrypoint(debug=""):
         if "format" not in overrides:
             overrides["format"] = DEFAULT_CFG.format or "torchscript"
             LOGGER.warning(f"WARNING ⚠️ 'format' argument is missing. Using default 'format={overrides['format']}'.")
-
     # Run command in python
     getattr(model, mode)(**overrides)  # default args from model
+    print(getattr(model, mode)(**overrides))
 
     # Show help
     LOGGER.info(f"💡 Learn more at https://docs.ultralytics.com/modes/{mode}")

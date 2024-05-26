@@ -225,7 +225,7 @@ class BasePredictor:
 
             # Warmup model
             if not self.done_warmup:
-                self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.dataset.bs, 3, *self.imgsz))
+                self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.dataset.bs, 6, *self.imgsz))
                 self.done_warmup = True
 
             self.seen, self.windows, self.batch = 0, [], None
@@ -238,11 +238,9 @@ class BasePredictor:
             for self.batch in self.dataset:
                 self.run_callbacks("on_predict_batch_start")
                 paths, im0s, s = self.batch
-
                 # Preprocess
                 with profilers[0]:
                     im = self.preprocess(im0s)
-
                 # Inference
                 with profilers[1]:
                     preds = self.inference(im, *args, **kwargs)

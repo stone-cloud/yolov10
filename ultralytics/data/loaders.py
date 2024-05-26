@@ -290,7 +290,6 @@ class LoadImagesAndVideos:
                 files.append(str((parent / p).absolute()))  # files (relative to *.txt file parent)
             else:
                 raise FileNotFoundError(f"{p} does not exist")
-
         images = [x for x in files if x.split(".")[-1].lower() in IMG_FORMATS]
         videos = [x for x in files if x.split(".")[-1].lower() in VID_FORMATS]
         ni, nv = len(images), len(videos)
@@ -357,7 +356,12 @@ class LoadImagesAndVideos:
                         self._new_video(self.files[self.count])
             else:
                 self.mode = "image"
-                im0 = cv2.imread(path)  # BGR
+                if path.endswith(".tiff"):
+                    import tifffile
+                    im0 = tifffile.imread(path)
+                    im0 = np.transpose(im0, axes=(1, 2, 0))
+                else:
+                    im0 = cv2.imread(path)  # BGR
                 if im0 is None:
                     raise FileNotFoundError(f"Image Not Found {path}")
                 paths.append(path)
@@ -507,7 +511,11 @@ def autocast_list(source):
     files = []
     for im in source:
         if isinstance(im, (str, Path)):  # filename or uri
-            files.append(Image.open(requests.get(im, stream=True).raw if str(im).startswith("http") else im))
+            import tifffile
+            im = tifffile.imread(im)
+            im = np.transpose(im, axes=(1, 2, 0))
+            # files.append(Image.open(requests.get(im, stream=True).raw if str(im).startswith("http") else im))
+            files.append(im)
         elif isinstance(im, (Image.Image, np.ndarray)):  # PIL or np Image
             files.append(im)
         else:

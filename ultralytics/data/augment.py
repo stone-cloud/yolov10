@@ -17,6 +17,7 @@ from ultralytics.utils.ops import segment2box, xyxyxyxy2xywhr
 from ultralytics.utils.torch_utils import TORCHVISION_0_10, TORCHVISION_0_11, TORCHVISION_0_13
 from .utils import polygons2masks, polygons2masks_overlap
 
+from skimage.transform import warp, AffineTransform
 DEFAULT_MEAN = (0.0, 0.0, 0.0)
 DEFAULT_STD = (1.0, 1.0, 1.0)
 DEFAULT_CROP_FTACTION = 1.0
@@ -431,7 +432,11 @@ class RandomPerspective:
             if self.perspective:
                 img = cv2.warpPerspective(img, M, dsize=self.size, borderValue=(114, 114, 114))
             else:  # affine
-                img = cv2.warpAffine(img, M[:2], dsize=self.size, borderValue=(114, 114, 114))
+                channel_list = cv2.split(img)
+                transformed_channels = [cv2.warpAffine(channel, M[:2], dsize=self.size,
+                                                       borderValue=(114, 114, 114)) for channel in channel_list]
+                # img = cv2.warpAffine(img, M[:2], dsize=self.size, borderValue=(114, 114, 114))
+                img = cv2.merge(transformed_channels)
         return img, M, s
 
     def apply_bboxes(self, bboxes, M):
@@ -611,7 +616,8 @@ class RandomHSV:
         img = labels["img"]
         if self.hgain or self.sgain or self.vgain:
             r = np.random.uniform(-1, 1, 3) * [self.hgain, self.sgain, self.vgain] + 1  # random gains
-            hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
+            hue1, sat1, val1 = cv2.split(cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2HSV))
+            hue2, sat2, val2 = cv2.split(cv2.cvtColor(img[:, :, 3:], cv2.COLOR_BGR2HSV))
             dtype = img.dtype  # uint8
 
             x = np.arange(0, 256, dtype=r.dtype)
@@ -619,8 +625,10 @@ class RandomHSV:
             lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
             lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
 
-            im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-            cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+            im_hsv_rgb = cv2.merge((cv2.LUT(hue1, lut_hue), cv2.LUT(sat1, lut_sat), cv2.LUT(val1, lut_val)))
+            im_hsv_tir = cv2.merge((cv2.LUT(hue2, lut_hue), cv2.LUT(sat2, lut_sat), cv2.LUT(val2, lut_val)))
+            img[:, :, :3] = cv2.cvtColor(im_hsv_rgb, cv2.COLOR_HSV2BGR)  # no return needed
+            img[:, :, 3:] = cv2.cvtColor(im_hsv_tir, cv2.COLOR_HSV2BGR)  # no return needed
         return labels
 
 
@@ -727,9 +735,15 @@ class LetterBox:
             img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
         top, bottom = int(round(dh - 0.1)) if self.center else 0, int(round(dh + 0.1))
         left, right = int(round(dw - 0.1)) if self.center else 0, int(round(dw + 0.1))
-        img = cv2.copyMakeBorder(
-            img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
-        )  # add border
+        if img.shape[2] > 3:
+            border_img = np.ones((img.shape[0]+top+bottom, img.shape[1]+left+right,
+                                  img.shape[2]), dtype=img.dtype) * 114
+            border_img[top: img.shape[0]+top, left: img.shape[1]+left, :] = img
+            img = border_img
+        else:
+            img = cv2.copyMakeBorder(
+                img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
+            )  # add border
         if labels.get("ratio_pad"):
             labels["ratio_pad"] = (labels["ratio_pad"], (left, top))  # for evaluation
 
